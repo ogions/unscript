@@ -28,9 +28,7 @@ Unscript currently supports the following formats to some extent:
 
 A JavaScript class that represents a single screenplay. It is made up of a title page object (which holds the title, authors, and other metadata about the script) and an ordered list of script elements.
 
-I view a screenplay as an ordered list of semantically meaningful parts. Each of these is a ScriptElement, an object with a type (e.g. action, scene heading, transition), which is in turn made up of an ordered list of text elements. Each text element contains a string and a set of styles. This allows text with different styles to be nested in the same script element; for example:
-
-    The writer flips his desk. **CRASH!**
+I view a screenplay as an ordered list of semantically meaningful parts. Each of these is a ScriptElement, an object with a type (e.g. action, scene heading, transition), which is in turn made up of an ordered list of text elements. Each text element contains a string and a set of styles. This allows text with different styles to be nested in the same script element.
 
 Each of these objects also contains a method to convert it to HTML. This is contained in the Script object, rather than the ScriptWriter object, because I understand it as a format of viewing and representing the script, rather than a format for editing.
 
