@@ -1,15 +1,15 @@
 class ScriptWriter {
     
-    async writeFile(type) {
+    async writeFile(script, type) {
         switch(type) {
             case "epub":
-                return await this.writeEPUBFile(currentScript);
+                return await this.writeEPUBFile(script);
             case "fdx":
-                return this.writeFDXFile(currentScript);
+                return this.writeFDXFile(script);
             case "fountain":
-                return this.writeFountainFile(currentScript);
+                return this.writeFountainFile(script);
             case "osf":
-                return this.writeOSFFile(currentScript);
+                return this.writeOSFFile(script);
         }
     }
 
