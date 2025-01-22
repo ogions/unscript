@@ -93,3 +93,5 @@ class TextElement {
         return baseElement;
     }
 }
+
+export { Script };
