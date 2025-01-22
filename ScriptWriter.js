@@ -360,5 +360,3 @@ class ScriptWriter {
         return new File([xmlText], `${script.titlePage.get("title")}.xml`);
     }
 }
-
-export { ScriptWriter };

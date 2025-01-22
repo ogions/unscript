@@ -828,5 +828,3 @@ class ScriptReader {
         return new Script(titlePage, scriptElements);
     }
 }
-
-export { ScriptReader };
