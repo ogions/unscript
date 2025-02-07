@@ -3,8 +3,11 @@ class ScriptReader {
         this.REGEXES = {
             newlines: /[\n\r]([\n\r]*)/,
             author: /(written|screenplay) by/i,
+            boneyardOpen: /^\/\*/,
+            boneyardClose: /\*\/\s*$/,
             centered: /^>[^<>\n]+<$/,
             character: /^[^a-z]+(\(cont'd\))?$/,
+            comment: /^\s*\[{2}[^\]\n]+\]{2}\s*$/,
             dualDialogue: /\s*\^\s*/,
             fileName: /^(.*)\.[^\.]+$/,
             pageBreak: /^={3,}\s*$/,
@@ -165,7 +168,7 @@ class ScriptReader {
             // Parse markdown to get styles
             let textElements = parseFountainMarkup(line);
 
-            // Lyrics
+            // Lyrics are currently unsupported and are interpreted as action.
 
             // Forced action
             if (line.charAt(0) === "!") {
@@ -192,20 +195,40 @@ class ScriptReader {
                 return;
             }
 
+            // Boneyard, page breaks, synopsis, comments, and section headings are unsupported by Unscript.
+
             // Boneyard
+            if (REGEXES.boneyardOpen.test(line)) {
+                isInsideBoneyard = true;
+            }
+
+            if (isInsideBoneyard && REGEXES.boneyardClose.test(line)) {
+                isInsideBoneyard = false;
+                return;
+            }
+
+            if (isInsideBoneyard) return;
     
             // Page breaks
             if (REGEXES.pageBreak.test(line)) {
-                type = "pageBreak";
                 hasBlankLineBefore = false;
-                return new ScriptElement(type);
+                return;
             }
     
             // Synopsis
+            if (line.charAt(0) === "=") {
+                return;
+            }
     
             // Comments
+            if (REGEXES.comment.test(line)) {
+                return;
+            }
 
             // Section headings
+            if (line.charAt(0) === "#") {
+                return;
+            }
 
             // Forced scene headings
             if (line.length > 1 && line.charAt(0) === "." && line.charAt(1) != ".") {
@@ -443,6 +466,7 @@ class ScriptReader {
         // Script content
         let scriptElements = [];
         let i = -1;
+        let isInsideBoneyard = false;
         let isInsideDialogueBlock = false;
         let isInsideDualDialogueBlock = false;
         let hasBlankLineBefore = true;
