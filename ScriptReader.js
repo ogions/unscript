@@ -586,6 +586,7 @@ class ScriptReader {
         const PDF_DPI = 72;
         const TITLE_PAGE_THRESHOLD = 20;
         const REGEXES = this.REGEXES;
+        // Weights are hand-selected based on trial and error.
         const WEIGHTS = [
             [2, 2, 2, 2, 2, 2],
             [1, 1, 1, 2, 5, 2],
@@ -798,6 +799,7 @@ class ScriptReader {
         ]);
 
         if (pages[0].length < TITLE_PAGE_THRESHOLD) {
+            if (!pages[0][0]) return;
             titlePage.set("title", pages[0][0].str);
             let isAuthor = false;
             for (let line of pages[0]) {
