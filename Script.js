@@ -8,7 +8,6 @@ class Script {
     toHTML() {
         const html = [];
         this.scriptElements.forEach((scriptElement) => {
-            if (scriptElement.type === "pageBreak") return;
             html.push(scriptElement.toHTMLElement());
         });
         return html;
@@ -21,10 +20,8 @@ class ScriptElement {
         if (textElements) this.textElements = textElements;
         if (isCentered) this.isCentered = true;
     }
-
+    
     toHTMLElement() {
-        if (this.type === "pageBreak") return;
-
         if (this.type === "dualDialogue") {
             const block = document.createElement("div");
             const leftColumn = document.createElement("div");
