@@ -253,10 +253,6 @@ class ScriptWriter {
         ])
 
         function writeFountainLine(scriptElement) {
-            if (scriptElement.type === "pageBreak") {
-                return "===";
-            }
-
             let line = "";
             for (let textElement of scriptElement.textElements) {
                 let styleString = "";
