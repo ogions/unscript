@@ -22,6 +22,7 @@ class ScriptElement {
     }
 
     getFullText() {
+        if (!this.textElements) return;
         return this.textElements.reduce(
             (a, c) => a + c.text,
             ""
