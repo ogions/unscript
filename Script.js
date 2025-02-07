@@ -20,7 +20,14 @@ class ScriptElement {
         if (textElements) this.textElements = textElements;
         if (isCentered) this.isCentered = true;
     }
-    
+
+    getFullText() {
+        return this.textElements.reduce(
+            (a, c) => a + c.text,
+            ""
+        );
+    }
+
     toHTMLElement() {
         if (this.type === "dualDialogue") {
             const block = document.createElement("div");
