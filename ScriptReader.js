@@ -818,7 +818,7 @@ class ScriptReader {
         // Assumes that action, dialogue, and characters are the three most common
         // elements in the script.
         // TODO: check against page size to ensure that results are within reasonable ranges.
-        const xTransforms = pages.flat().map((line) => line.transform[4]);
+        const xTransforms = pages.flat().map((line) => line ? line.transform[4] : undefined);
         const [actionTransform, dialogueTransform, characterTransform] = modesOf(xTransforms).slice(0, 3).sort((a, b) => a - b);
 
         const scriptElements = [];
@@ -830,6 +830,8 @@ class ScriptReader {
             let previousElement;
             let isNewPage = true;
             for (let line of page) {
+
+                if (!line) continue;
 
                 const scriptElement = classifyLine(line, previousLineY, previousElement, isNewPage)
                 if (scriptElement) {
