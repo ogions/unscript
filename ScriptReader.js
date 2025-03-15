@@ -589,7 +589,7 @@ class ScriptReader {
         // Weights are hand-selected based on trial and error.
         const WEIGHTS = [
             [2, 2, 2, 2, 2, 2],
-            [1, 1, 1, 2, 5, 2],
+            [1, 1, 1, 2, 8, 2],
             [1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1],
             [1, 5, 5, 5, 1, 1]
@@ -673,7 +673,9 @@ class ScriptReader {
                 scores[0][5] = 1;
             }
 
+
             // Content
+            line.str = line.str.trim();
             scores[1][1] += REGEXES.character.test(line.str);
             scores[1][3] += REGEXES.parenthetical.test(line.str);
             scores[1][4] += REGEXES.sceneHeading.test(line.str);
