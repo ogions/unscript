@@ -12,7 +12,7 @@ class ScriptReader {
             fileName: /^(.*)\.[^\.]+$/,
             pageBreak: /^={3,}\s*$/,
             parenthetical: /^\s*\(/,
-            sceneHeading: /^(INT\.|EXT\.|EST\.|(I|INT)\.?\/(E|EXT)\.?)[^\n]+$/i,
+            sceneHeading: /^(\d+\s*)*(INT\.|EXT\.|EST\.|(I|INT)\.?\/(E|EXT)\.?)[^\n]+$/i,
             transition: /^[^a-z]*TO:$/
         }
     }
@@ -581,11 +581,12 @@ class ScriptReader {
         let PDF_TOP_TRIM = 1;
         let PDF_RIGHT_TRIM = 1;
         let PDF_BOTTOM_TRIM = 1;
-        let PDF_LEFT_TRIM = 1.5;
+        let PDF_LEFT_TRIM = 1;
         const POSITION_ERROR_MARGIN = 10;
         const PDF_DPI = 72;
         const TITLE_PAGE_THRESHOLD = 20;
         const REGEXES = this.REGEXES;
+        const SCENE_NUMBER_REGEX = /^([\d\s]*)(.+?)(?=[\d\s]*$)([\d\s]*)$/;
         // Weights are hand-selected based on trial and error.
         const WEIGHTS = [
             [2, 2, 2, 2, 2, 2],
@@ -776,19 +777,18 @@ class ScriptReader {
         let pages = [];
         let pageSizes = [];
         for (let p = 1; p <= pdf.numPages; p++) {
-            let items = [];
             const textContent = await pdf.getPage(p)
                 .then((page) => {
                     pageSizes.push(page.getViewport().viewBox.slice(2, 4));
                     return page.getTextContent();
                 })
                 .then((content) => content.items.filter((item) => item.str));
-            items = items.concat(textContent);
-            pages.push(items);
+            pages.push([...textContent]);
         }
 
         const pageWidth = modesOf(pageSizes.map(([a, b]) => a))[0];
         const pageHeight = modesOf(pageSizes.map(([a, b]) => b))[0];
+
         trim(pages, pageWidth, pageHeight);
 
         collapseItems(pages);
@@ -837,9 +837,19 @@ class ScriptReader {
 
                 const scriptElement = classifyLine(line, previousLineY, previousElement, isNewPage)
                 if (scriptElement) {
+
+                    // This method doesn't currently handle styles,
+                    // So we can assume everything is in a single text element.
+
+                    if (scriptElement.type === "sceneHeading") {
+                        console.log("Correcting text: " + scriptElement.textElements[0].text);
+                        console.log(scriptElement.textElements[0].text.match(SCENE_NUMBER_REGEX));
+                        scriptElement.textElements[0].text = scriptElement.textElements[0].text.replace(SCENE_NUMBER_REGEX, "$2").trim()
+                    }
                     if (previousElement && previousElement.type === scriptElement.type && previousLineY - line.transform[5] < line.height + POSITION_ERROR_MARGIN) {
-                        previousElement.textElements[0].text += " ";
-                        previousElement.textElements[0].text += scriptElement.textElements[0].text;
+                        let lastTextElement = previousElement.textElements[previousElement.textElements.length - 1];
+                        lastTextElement.text += " ";
+                        lastTextElement.text += scriptElement.textElements[0].text;
                     } else if (isWithinDualDialogue) {
                         scriptElements[scriptElements.length - 1].right.push(scriptElement);
                         previousElement = scriptElement;
