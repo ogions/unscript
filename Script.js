@@ -21,6 +21,8 @@ class ScriptElement {
         if (isCentered) this.isCentered = true;
     }
 
+    // Utility method to get the full text of an element without styling.
+    // Used by some UI elements in the web platform.
     getFullText() {
         if (!this.textElements) return;
         return this.textElements.reduce(
