@@ -61,11 +61,13 @@ class ScriptReader {
             ["Transition", "transition"]
         ]);
 
+        // Helper function to transform a single paragraph into a ScriptElement
         function parseFDXParagraph(paragraph) {
             const type = FDX_MAP.get(paragraph.getAttribute("Type")) || "action";
             const scriptElement = new ScriptElement(type);
     
             // Dual dialogue
+            // We parse the child nodes of the DualDialogue node and build left and right elements
             if (type === "general" && paragraph.getElementsByTagName("DualDialogue").length > 0) {
                 for (let dualDialogue of paragraph.getElementsByTagName("DualDialogue")) {
                     scriptElement.type = "dualDialogue";
@@ -502,6 +504,7 @@ class ScriptReader {
             ["Transition", "transition"]
         ]);
 
+        // Helper function to transform a single OSF paragraph as a ScriptElement
         function parseOSFParagraph(paragraph) {
             const baseStyle = paragraph.getElementsByTagName("style")[0].getAttribute("basestyle");
             const type = OSF_MAP.get(baseStyle) || "action";
@@ -614,6 +617,7 @@ class ScriptReader {
             return sorted.map(([k, v]) => k);
         }
 
+        // Ignore anything outside of the specified margins
         function trim(pages, pageWidth, pageHeight) {
             for (let page of pages) {
                 for (let i = page.length - 1; i >= 0; i--) {
@@ -627,6 +631,7 @@ class ScriptReader {
             }
         }
 
+        // Combine text items that are on the same line into a single element
         function collapseItems(pages) {
             for (let i = 0; i < pages.length; i++) {
                 let collapsedItems = [];
@@ -649,8 +654,10 @@ class ScriptReader {
         }
 
         function classifyLine(line, previousLineY, previousElement, isNewPage) {
-            // Outer: margin, content, previous line distance, previous line type, dual dialogue
-            // Inner: action, character, dialogue, parenthetical, scene heading, transition
+            // Each line is scored according to five criteria, the "outer" levels of the scores matrix:
+            // Margin, content, previous line distance, previous line type, dual dialogue
+            // Each metric assigns a certain point value to the type of element (the "inner" levels):
+            // Action, character, dialogue, parenthetical, scene heading, transition
             const scores = [[0, 0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0, 0],
@@ -673,7 +680,6 @@ class ScriptReader {
             } else if (lineX > characterTransform) {
                 scores[0][5] = 1;
             }
-
 
             // Content
             line.str = line.str.trim();
