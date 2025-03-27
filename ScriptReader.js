@@ -620,6 +620,7 @@ class ScriptReader {
         // Ignore anything outside of the specified margins
         function trim(pages, pageWidth, pageHeight) {
             for (let page of pages) {
+                page = page[0];
                 for (let i = page.length - 1; i >= 0; i--) {
                     if (page[i].transform[5] > pageHeight - (PDF_TOP_TRIM * PDF_DPI) + POSITION_ERROR_MARGIN ||
                         page[i].transform[4] > pageWidth - (PDF_RIGHT_TRIM * PDF_DPI) + POSITION_ERROR_MARGIN ||
@@ -638,7 +639,7 @@ class ScriptReader {
                 let line = [];
                 const lines = [];
                 let baseItem;
-                for (let item of pages[i]) {
+                for (let item of pages[i][0]) {
 
                     // Base case
                     if (!baseItem) {
@@ -665,11 +666,11 @@ class ScriptReader {
                 }
                 line.push(baseItem);
                 lines.push(line);
-                pages.splice(i, 1, lines);
+                pages[i][0] = lines;
             }
         }
 
-        function classifyLine(line, previousLineY, previousElement, isNewPage) {
+        function classifyLine(line, previousLineY, previousElement, isNewPage, pagePaths) {
             // Each line is scored according to five criteria, the "outer" levels of the scores matrix:
             // Margin, content, previous line distance, previous line type, dual dialogue
             // Each metric assigns a certain point value to the type of element (the "inner" levels):
@@ -797,11 +798,54 @@ class ScriptReader {
                 const text = item.str;
                 const styles = [];
                 const fontStyle = fonts.get(item.fontName).toLowerCase();
-                if (fontStyle.includes("italic")) {
+                if (fontStyle.includes("italic") || fontStyle.includes("oblique")) {
                     styles.push("italic");
                 }
                 if (fontStyle.includes("bold")) {
                     styles.push("bold");
+                }
+
+                // Check for underline
+                
+                if (pagePaths.length > 0) {
+                    let foundUnderline = false;
+                    for (let path of pagePaths) {
+                        // Text y is defined from bottom of page, but stroke y is defined
+                        // from the top (go figure).
+                        const underlineY = pageHeight - path[1];
+                        const underlineX = path[0];
+                        const underlineWidth = path[2] - path[0];
+
+                        // Check if the stroke is both below the given line and positioned
+                        // close to it (within the error margin).
+                        if (underlineY - lineY < 0 && Math.abs(underlineY - lineY) < POSITION_ERROR_MARGIN) {
+                            foundUnderline = true;
+                            console.log(content);
+
+                            // Get offset from start of line
+                            const startOffset = underlineX - lineX;
+                        
+                            // Calculate in characters.
+                            // TODO: Solidify character width constant (for now, 7)
+                            // TODO: Account for double spaces (interpreted as one character but affect rendering)
+                            const charOffset = Math.round(startOffset / 7);
+                            const charWidth = Math.round(underlineWidth / 7);
+                            console.log("Character offset: " + charOffset);
+                            console.log("Character width: " + charWidth);
+
+                            // Split the item into separate items
+                            const firstElemText = item.str.substr(0, charOffset);
+                            console.log(firstElemText);
+                            if (firstElemText) textElements.push(new TextElement(firstElemText, new Set(styles)))
+                            const secondElemText = item.str.substr(charOffset, charWidth);
+                            console.log(secondElemText);
+                            textElements.push(new TextElement(secondElemText, new Set(styles.concat(["underline"]))))
+                            const thirdElemText = item.str.substr(charOffset + charWidth);
+                            console.log(thirdElemText);
+                            if (thirdElemText) textElements.push(new TextElement(thirdElemText, new Set(styles)))
+                        }
+                    }
+                    if (foundUnderline) continue;
                 }
                 textElements.push(new TextElement(text, new Set(styles)))
             }
@@ -821,7 +865,6 @@ class ScriptReader {
 
             const textContent = await page.getTextContent()
                 .then((content) => content.items.filter((item) => item.str));
-            pages.push([...textContent]);
 
             // Get fonts
             const operators = await page.getOperatorList();
@@ -832,10 +875,20 @@ class ScriptReader {
                 }
             }
 
+            // Get underlines
+            const underlines = [];
+            for (let i = 0; i < operators.fnArray.length; i++) {
+                const fn = operators.fnArray[i];
+                if (fn === pdfjsLib.OPS.stroke) {
+                    // Found an underline, we need the path from the previous
+                    // function call's arguments. The arguments to constructPath
+                    // are an array of length 3. The second argument is the one we want.
+                    underlines.push(operators.argsArray[i - 1][1]);
+                }
+            }
 
+            pages.push([textContent, underlines]);
         }
-
-        console.log(fonts);
 
         const pageWidth = modesOf(pageSizes.map(([a, b]) => a))[0];
         const pageHeight = modesOf(pageSizes.map(([a, b]) => b))[0];
@@ -851,11 +904,11 @@ class ScriptReader {
             ["author", "Anonymous"]
         ]);
 
-        if (pages[0].length < TITLE_PAGE_THRESHOLD) {
-            if (!pages[0][0]) return;
-            titlePage.set("title", pages[0][0].str);
+        if (pages[0][0].length < TITLE_PAGE_THRESHOLD) {
+            if (!pages[0][0][0]) return;
+            titlePage.set("title", pages[0][0][0].str);
             let isAuthor = false;
-            for (let line of pages[0]) {
+            for (let line of pages[0][0]) {
                 if (isAuthor) {
                     titlePage.set("author", line.str);
                     isAuthor = false;
@@ -864,14 +917,17 @@ class ScriptReader {
                 if (REGEXES.author.test(line.str)) isAuthor = true;
             }
 
-            pages = pages.slice(1);
+            pages[0] = pages[0].slice(1);
         }
 
         // Get the most common x transforms to help with typing.
         // Assumes that action, dialogue, and characters are the three most common
         // elements in the script.
         // TODO: check against page size to ensure that results are within reasonable ranges.
-        const xTransforms = pages.flat().map((line) => line[0] ? line[0].transform[4] : undefined);
+        const xTransforms = pages
+            .map((page) => page[0])
+            .flat()
+            .map((line) => line[0] ? line[0].transform[4] : undefined);
         const [actionTransform, dialogueTransform, characterTransform] = modesOf(xTransforms).slice(0, 3).sort((a, b) => a - b);
 
         const scriptElements = [];
@@ -879,6 +935,9 @@ class ScriptReader {
         let lastCharacterY;
 
         for (let page of pages) {
+            const pagePaths = page[1];
+            console.log(pagePaths);
+            page = page[0];
             let previousLineY;
             let previousElement;
             let isNewPage = true;
@@ -886,7 +945,7 @@ class ScriptReader {
 
                 if (!line[0]) continue;
 
-                const scriptElement = classifyLine(line, previousLineY, previousElement, isNewPage)
+                const scriptElement = classifyLine(line, previousLineY, previousElement, isNewPage, pagePaths)
                 if (scriptElement) {
 
                     if (scriptElement.type === "sceneHeading") {
