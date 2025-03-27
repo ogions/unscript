@@ -632,24 +632,40 @@ class ScriptReader {
         }
 
         // Combine text items that are on the same line into a single element
+        // while separating elements with different font styles
         function collapseItems(pages) {
             for (let i = 0; i < pages.length; i++) {
-                let collapsedItems = [];
+                let line = [];
+                const lines = [];
                 let baseItem;
                 for (let item of pages[i]) {
+
+                    // Base case
                     if (!baseItem) {
                         baseItem = item;
                         continue;
                     }
+
+                    // New line: we need to add it to the list and reset for processing the next one
                     if (item.transform[5] != baseItem.transform[5]) {
-                        collapsedItems.push(baseItem);
+                        line.push(baseItem);
+                        lines.push(line);
+                        line = [];
+                        baseItem = item;
+                        continue;
+                    }
+
+                    // New style: we need to add the previous item to the line  and reset for the next
+                    if (item.fontName != baseItem.fontName) {
+                        line.push(baseItem);
                         baseItem = item;
                         continue;
                     }
                     baseItem.str += item.str;
                 }
-                collapsedItems.push(baseItem);
-                pages.splice(i, 1, collapsedItems);
+                line.push(baseItem);
+                lines.push(line);
+                pages.splice(i, 1, lines);
             }
         }
 
@@ -665,8 +681,8 @@ class ScriptReader {
                             [0, 0, 0, 0, 0, 0]];
 
             // Margins
-            const lineX = line.transform[4];
-            const lineY = line.transform[5];
+            const lineX = line[0].transform[4];
+            const lineY = line[0].transform[5];
             if (Math.abs(lineX - actionTransform) < POSITION_ERROR_MARGIN) {
                 scores[0][0] = 1;
                 scores[0][4] = 1;
@@ -682,19 +698,19 @@ class ScriptReader {
             }
 
             // Content
-            line.str = line.str.trim();
-            scores[1][1] += REGEXES.character.test(line.str);
-            scores[1][3] += REGEXES.parenthetical.test(line.str);
-            scores[1][4] += REGEXES.sceneHeading.test(line.str);
-            scores[1][0] += !REGEXES.sceneHeading.test(line.str);
-            scores[1][5] += REGEXES.transition.test(line.str);
+            const content = line.map((item) => item.str).join();
+            scores[1][1] += REGEXES.character.test(content);
+            scores[1][3] += REGEXES.parenthetical.test(content);
+            scores[1][4] += REGEXES.sceneHeading.test(content);
+            scores[1][0] += !REGEXES.sceneHeading.test(content);
+            scores[1][5] += REGEXES.transition.test(content);
 
             // Previous line distance
             let hasBlankLineBefore;
             if (isNewPage) {
                 hasBlankLineBefore = true;
             } else {
-                if (previousLineY - lineY < line.height + POSITION_ERROR_MARGIN) {
+                if (previousLineY - lineY < line[0].height + POSITION_ERROR_MARGIN) {
                     hasBlankLineBefore = false;
                     scores[2][0] = 1;
                     scores[2][2] = 1;
@@ -775,22 +791,51 @@ class ScriptReader {
 
             if (type === "character") lastCharacterY = lineY;
 
-            return new ScriptElement(type, [new TextElement(line.str)]);
+            // Style the line
+            const textElements = [];
+            for (let item of line) {
+                const text = item.str;
+                const styles = [];
+                const fontStyle = fonts.get(item.fontName).toLowerCase();
+                if (fontStyle.includes("italic")) {
+                    styles.push("italic");
+                }
+                if (fontStyle.includes("bold")) {
+                    styles.push("bold");
+                }
+                textElements.push(new TextElement(text, new Set(styles)))
+            }
+
+            return new ScriptElement(type, textElements);
         }
 
         const pdf = await file.bytes()
             .then((bytes) => pdfjsLib.getDocument(bytes).promise);
         let pages = [];
         let pageSizes = [];
+        let fonts = new Map();
         for (let p = 1; p <= pdf.numPages; p++) {
-            const textContent = await pdf.getPage(p)
-                .then((page) => {
-                    pageSizes.push(page.getViewport().viewBox.slice(2, 4));
-                    return page.getTextContent();
-                })
+
+            const page = await pdf.getPage(p);
+            pageSizes.push(page.getViewport().viewBox.slice(2, 4));
+
+            const textContent = await page.getTextContent()
                 .then((content) => content.items.filter((item) => item.str));
             pages.push([...textContent]);
+
+            // Get fonts
+            const operators = await page.getOperatorList();
+
+            for (let [obj, data] of page.commonObjs) {
+                if (!fonts.has(obj)) {
+                    fonts.set(obj, data.name)
+                }
+            }
+
+
         }
+
+        console.log(fonts);
 
         const pageWidth = modesOf(pageSizes.map(([a, b]) => a))[0];
         const pageHeight = modesOf(pageSizes.map(([a, b]) => b))[0];
@@ -826,7 +871,7 @@ class ScriptReader {
         // Assumes that action, dialogue, and characters are the three most common
         // elements in the script.
         // TODO: check against page size to ensure that results are within reasonable ranges.
-        const xTransforms = pages.flat().map((line) => line ? line.transform[4] : undefined);
+        const xTransforms = pages.flat().map((line) => line[0] ? line[0].transform[4] : undefined);
         const [actionTransform, dialogueTransform, characterTransform] = modesOf(xTransforms).slice(0, 3).sort((a, b) => a - b);
 
         const scriptElements = [];
@@ -839,23 +884,18 @@ class ScriptReader {
             let isNewPage = true;
             for (let line of page) {
 
-                if (!line) continue;
+                if (!line[0]) continue;
 
                 const scriptElement = classifyLine(line, previousLineY, previousElement, isNewPage)
                 if (scriptElement) {
 
-                    // This method doesn't currently handle styles,
-                    // So we can assume everything is in a single text element.
-
                     if (scriptElement.type === "sceneHeading") {
-                        console.log("Correcting text: " + scriptElement.textElements[0].text);
-                        console.log(scriptElement.textElements[0].text.match(SCENE_NUMBER_REGEX));
                         scriptElement.textElements[0].text = scriptElement.textElements[0].text.replace(SCENE_NUMBER_REGEX, "$2").trim()
                     }
-                    if (previousElement && previousElement.type === scriptElement.type && previousLineY - line.transform[5] < line.height + POSITION_ERROR_MARGIN) {
+                    if (previousElement && previousElement.type === scriptElement.type && previousLineY - line[0].transform[5] < line[0].height + POSITION_ERROR_MARGIN) {
                         let lastTextElement = previousElement.textElements[previousElement.textElements.length - 1];
                         lastTextElement.text += " ";
-                        lastTextElement.text += scriptElement.textElements[0].text;
+                        previousElement.textElements = previousElement.textElements.concat(scriptElement.textElements);
                     } else if (isWithinDualDialogue) {
                         scriptElements[scriptElements.length - 1].right.push(scriptElement);
                         previousElement = scriptElement;
@@ -865,7 +905,7 @@ class ScriptReader {
                     }
                 }
 
-                previousLineY = line.transform[5];
+                previousLineY = line[0].transform[5];
                 isNewPage = false;
                 
             }
