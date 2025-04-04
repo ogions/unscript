@@ -927,7 +927,7 @@ class ScriptReader {
         const xTransforms = pages
             .map((page) => page[0])
             .flat()
-            .map((line) => line[0] ? line[0].transform[4] : undefined);
+            .map((line) => line[0] ? Math.round(line[0].transform[4]) : undefined);
         const [actionTransform, dialogueTransform, characterTransform] = modesOf(xTransforms).slice(0, 3).sort((a, b) => a - b);
 
         const scriptElements = [];
